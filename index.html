@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Manager (Standalone)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventory Manager</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root {
@@ -18,48 +18,57 @@
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             text-align: center; 
-            padding: 24px; 
+            padding: 20px; 
             background-color: var(--bg-color); 
             color: var(--text-color);
-            max-width: 540px;
+            max-width: 500px;
             margin: 0 auto;
         }
 
-        h2 { font-size: 2rem; margin-bottom: 1.5rem; }
+        h2 { font-size: 1.8rem; margin-bottom: 1.2rem; }
 
-        /* Large Mobile-Friendly Buttons */
+        /* Large, Mobile-Friendly Button */
         .btn { 
             width: 100%; 
-            padding: 22px; 
-            font-size: 1.3rem; 
+            padding: 24px; 
+            font-size: 1.4rem; 
             font-weight: bold; 
             cursor: pointer; 
             border: none; 
-            border-radius: 12px; 
+            border-radius: 14px; 
             color: white; 
-            margin: 12px 0; 
+            margin: 10px 0; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            transition: background-color 0.2s;
         }
 
         #start-btn { background-color: var(--primary-color); }
-        #reset-btn { background-color: var(--danger-color); }
+        #start-btn:active { background-color: #055160; }
+        
+        .btn-clear {
+            width: auto;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            margin-top: 25px;
+            background-color: var(--danger-color);
+        }
 
         /* Tab Navigation */
         .tab-container { 
             display: flex; 
             justify-content: space-between; 
             background: #e9ecef; 
-            padding: 8px; 
-            border-radius: 12px; 
-            margin-bottom: 24px;
+            padding: 6px; 
+            border-radius: 10px; 
+            margin-bottom: 20px;
         }
 
         .tab-btn { 
             flex: 1; 
-            padding: 18px; 
+            padding: 15px; 
             background: none; 
             border: none; 
-            font-size: 1.15rem; 
+            font-size: 1.05rem; 
             cursor: pointer; 
             border-radius: 8px; 
             color: var(--text-color);
@@ -68,40 +77,55 @@
         .tab-btn.active { 
             background: white; 
             font-weight: bold; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.15); 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
         }
 
         .view { 
             display: none; 
             background: white; 
-            padding: 28px; 
-            border-radius: 16px; 
+            padding: 24px; 
+            border-radius: 14px; 
             border: 1px solid var(--border-color); 
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08); 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
         }
         .view.active { display: block; }
 
         #reader { 
             width: 100%; 
-            margin: 20px auto; 
-            border-radius: 12px; 
+            max-width: 420px; 
+            margin: 15px auto; 
+            border-radius: 10px; 
             overflow: hidden; 
-            background: #000;
-            min-height: 250px;
+            background: #000; 
+            min-height: 200px;
+            display: none;
         }
 
-        #status { font-size: 1.2rem; margin: 18px 0; color: var(--secondary-color); }
+        #status {
+            font-size: 1.05rem;
+            margin: 15px 0;
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
 
-        ul { list-style: none; padding: 0; margin: 0; max-height: 350px; overflow-y: auto; text-align: left; }
+        ul { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0; 
+            max-height: 220px; 
+            overflow-y: auto; 
+            text-align: left; 
+        }
         li { 
-            padding: 16px; 
+            padding: 12px; 
             border-bottom: 1px solid #eee; 
             font-family: monospace; 
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             display: flex; 
             justify-content: space-between; 
         }
-        .timestamp { color: #666; font-size: 0.95rem; }
+        li:last-child { border-bottom: none; }
+        .timestamp { color: #666; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -110,103 +134,145 @@
 
     <div class="tab-container">
         <button id="tab-scan" class="tab-btn active" onclick="switchTab('scan-view')">Scanner</button>
-        <button id="tab-log" class="tab-btn" onclick="switchTab('log-view'); renderLocalLog();">Sorted Data</button>
+        <button id="tab-log" class="tab-btn" onclick="switchTab('log-view'); loadSortedLog();">Sorted Data</button>
     </div>
 
     <div id="scan-view" class="view active">
         <button id="start-btn" class="btn" onclick="startScanning()">Scan Barcode</button>
-        <div id="reader" style="display:none;"></div>
+        <div id="reader"></div>
         <p id="status">Ready to scan</p>
-        <button id="reset-btn" class="btn" onclick="confirmReset()">Clear Local Log</button>
+
+        <div>
+            <h3>Recent Scans</h3>
+            <ul id="recent-scans-list">
+                <li style="color: #999;">No scans in this session yet.</li>
+            </ul>
+        </div>
+
+        <button id="reset-btn" class="btn btn-clear" onclick="confirmReset()">Clear Google Sheet</button>
     </div>
 
     <div id="log-view" class="view">
-        <h3>Session Scans (Sorted)</h3>
+        <h3>UPC Scans (Ascending Order)</h3>
         <br>
         <ul id="sorted-list">
-            <li style="color: #999;">No scans in this session yet...</li>
+            <li style="color: #999;">Loading scans...</li>
         </ul>
         <br>
-        <button class="btn" style="background-color: var(--secondary-color);" onclick="renderLocalLog()">Refresh Sort</button>
+        <button class="btn" style="background-color: var(--secondary-color); width: auto; padding: 12px 24px;" onclick="loadSortedLog()">Refresh List</button>
     </div>
 
     <script>
-        const scriptURL = 'https://script.google.com/macros/s/AKfycbyJvS6xWvrSly5ilprmiHHBa4OCXLvmo3HjWvZ7ihvAj3wzkeQA8wGANfJPbq0kbykwWQ/exec';
-        let html5QrcodeScanner;
-        
-        // This array stores scans locally for sorting without needing the Apps Script host
-        let sessionScans = [];
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbwvS3WAbOX3f4x3XYLQcAXEIDw10nlQypEx90_5T0vuCcsedQEfIWVNHA1wm_KKLlFpyg/exec';
+        let html5QrCode;
+        let recentScans = [];
 
         function switchTab(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
-            
-            if (viewId === 'scan-view') document.getElementById('tab-scan').classList.add('active');
-            else document.getElementById('tab-log').classList.add('active');
+
+            if (viewId === 'scan-view') {
+                document.getElementById('tab-scan').classList.add('active');
+            } else {
+                document.getElementById('tab-log').classList.add('active');
+            }
         }
 
         function startScanning() {
-            document.getElementById('reader').style.display = 'block';
             document.getElementById('start-btn').style.display = 'none';
-            document.getElementById('status').innerText = "Requesting camera...";
+            document.getElementById('reader').style.display = 'block';
+            document.getElementById('status').innerText = "Requesting camera permissions...";
 
-            // Use the environment camera (rear)
-            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", config, false);
+            html5QrCode = new Html5Qrcode("reader");
             
-            html5QrcodeScanner.render(onScanSuccess, (err) => {
-                // Ignore frequent frame errors
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 140 } },
+                onScanSuccess,
+                (errorMessage) => { /* Ignore frequent frame errors */ }
+            ).catch(err => {
+                console.warn("Environment camera failed, falling back to user camera...", err);
+                html5QrCode.start(
+                    { facingMode: "user" },
+                    { fps: 10, qrbox: { width: 250, height: 140 } },
+                    onScanSuccess,
+                    (errorMessage) => { /* Ignore frame errors */ }
+                ).catch(fallbackErr => {
+                    document.getElementById('status').innerText = "Camera access error.";
+                    alert("Unable to open camera. Make sure your browser has permission.");
+                    stopScanning();
+                });
             });
         }
 
+        function stopScanning() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    document.getElementById('reader').style.display = 'none';
+                    document.getElementById('start-btn').style.display = 'block';
+                    document.getElementById('status').innerText = "Ready to scan";
+                }).catch(err => console.error(err));
+            } else {
+                document.getElementById('reader').style.display = 'none';
+                document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('status').innerText = "Ready to scan";
+            }
+        }
+
         function onScanSuccess(decodedText) {
-            const now = new Date();
-            const timeStr = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('status').innerText = "Scanned: " + decodedText;
+            stopScanning();
 
-            // 1. Add to local list for sorting
-            sessionScans.push({ barcode: decodedText, time: timeStr });
+            // Update recent scans UI
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            recentScans.unshift({ barcode: decodedText, date: timeStr });
+            if (recentScans.length > 5) recentScans.pop();
 
-            // 2. Visual Feedback
-            document.getElementById('status').innerText = "Last Scan: " + decodedText;
-            
-            // 3. Stop scanner to prevent double scans
-            html5QrcodeScanner.clear();
-            document.getElementById('reader').style.display = 'none';
-            document.getElementById('start-btn').style.display = 'block';
+            const list = document.getElementById('recent-scans-list');
+            list.innerHTML = recentScans.map(item => 
+                `<li><span><b>${item.barcode}</b></span> <span class="timestamp">${item.date}</span></li>`
+            ).join('');
 
-            // 4. Send to Google Sheets
             fetch(scriptURL, {
                 method: 'POST',
                 mode: 'no-cors',
                 body: JSON.stringify({ barcode: decodedText })
-            }).catch(e => console.error("Upload failed", e));
+            }).catch(err => console.error(err));
         }
 
-        function renderLocalLog() {
-            const list = document.getElementById('sorted-list');
-            list.innerHTML = '';
-
-            if (sessionScans.length === 0) {
-                list.innerHTML = '<li style="color: #999;">No scans in this session yet...</li>';
+        function loadSortedLog() {
+            if (typeof google === 'undefined' || !google.script) {
+                document.getElementById('sorted-list').innerHTML = `<li style="color:#999;">Only works when hosted as an Apps Script.</li>`;
                 return;
             }
 
-            // Sort the session array by barcode ascending
-            const sorted = [...sessionScans].sort((a, b) => a.barcode.localeCompare(b.barcode, undefined, {numeric: true}));
+            google.script.run.withSuccessHandler(function(data) {
+                const list = document.getElementById('sorted-list');
+                list.innerHTML = '';
+                
+                if (!data || data.length === 0) {
+                    list.innerHTML = `<li style="color:#999;">No scans found in the sheet.</li>`;
+                    return;
+                }
 
-            sorted.forEach(item => {
-                const li = document.createElement('li');
-                li.innerHTML = `<span><b>${item.barcode}</b></span> <span class="timestamp">${item.time}</span>`;
-                list.appendChild(li);
-            });
+                data.forEach(row => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span><b>${row.barcode}</b></span> <span class="timestamp">${row.date}</span>`;
+                    list.appendChild(li);
+                });
+            }).getSortedScans();
         }
 
         function confirmReset() {
-            if (confirm("Clear the session log? (This won't delete data from Google Sheets).")) {
-                sessionScans = [];
-                renderLocalLog();
-                document.getElementById('status').innerText = "Log cleared.";
+            const userConfirmed = confirm("Are you sure you want to clear the Google Sheet? This cannot be undone.");
+            if (userConfirmed) {
+                document.getElementById('status').innerText = "Clearing sheet...";
+                google.script.run.withSuccessHandler(function() {
+                    document.getElementById('status').innerText = "Sheet cleared.";
+                    loadSortedLog();
+                }).clearSheet();
             }
         }
     </script>
