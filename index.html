@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Manager</title>
+    <title>Inventory Manager (Standalone)</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root {
@@ -25,10 +25,7 @@
             margin: 0 auto;
         }
 
-        h2 {
-            font-size: 2rem;
-            margin-bottom: 1.5rem;
-        }
+        h2 { font-size: 2rem; margin-bottom: 1.5rem; }
 
         /* Large Mobile-Friendly Buttons */
         .btn { 
@@ -42,11 +39,9 @@
             color: white; 
             margin: 12px 0; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-            transition: background-color 0.2s;
         }
 
         #start-btn { background-color: var(--primary-color); }
-        #start-btn:active { background-color: #055160; }
         #reset-btn { background-color: var(--danger-color); }
 
         /* Tab Navigation */
@@ -76,7 +71,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.15); 
         }
 
-        /* Container Views */
         .view { 
             display: none; 
             background: white; 
@@ -89,29 +83,16 @@
 
         #reader { 
             width: 100%; 
-            max-width: 440px; 
             margin: 20px auto; 
             border-radius: 12px; 
             overflow: hidden; 
             background: #000;
-            min-height: 240px;
+            min-height: 250px;
         }
 
-        #status {
-            font-size: 1.2rem;
-            margin: 18px 0;
-            color: var(--secondary-color);
-            font-weight: 500;
-        }
+        #status { font-size: 1.2rem; margin: 18px 0; color: var(--secondary-color); }
 
-        ul { 
-            list-style: none; 
-            padding: 0; 
-            margin: 0; 
-            max-height: 300px; 
-            overflow-y: auto; 
-            text-align: left; 
-        }
+        ul { list-style: none; padding: 0; margin: 0; max-height: 350px; overflow-y: auto; text-align: left; }
         li { 
             padding: 16px; 
             border-bottom: 1px solid #eee; 
@@ -120,7 +101,6 @@
             display: flex; 
             justify-content: space-between; 
         }
-        li:last-child { border-bottom: none; }
         .timestamp { color: #666; font-size: 0.95rem; }
     </style>
 </head>
@@ -129,145 +109,104 @@
     <h2>Inventory Manager</h2>
 
     <div class="tab-container">
-        <button class="tab-btn active" onclick="switchTab('scan-view')">Scanner</button>
-        <button class="tab-btn" onclick="switchTab('log-view'); loadSortedLog();">Sorted Data</button>
+        <button id="tab-scan" class="tab-btn active" onclick="switchTab('scan-view')">Scanner</button>
+        <button id="tab-log" class="tab-btn" onclick="switchTab('log-view'); renderLocalLog();">Sorted Data</button>
     </div>
 
     <div id="scan-view" class="view active">
         <button id="start-btn" class="btn" onclick="startScanning()">Scan Barcode</button>
-        <div id="reader"></div>
+        <div id="reader" style="display:none;"></div>
         <p id="status">Ready to scan</p>
-
-        <button id="reset-btn" class="btn" onclick="confirmReset()">Clear Google Sheet</button>
+        <button id="reset-btn" class="btn" onclick="confirmReset()">Clear Local Log</button>
     </div>
 
     <div id="log-view" class="view">
-        <h3>UPC Scans (Ascending Order)</h3>
+        <h3>Session Scans (Sorted)</h3>
         <br>
         <ul id="sorted-list">
-            <li style="color: #999;">Loading scans...</li>
+            <li style="color: #999;">No scans in this session yet...</li>
         </ul>
         <br>
-        <button class="btn" style="background-color: var(--secondary-color);" onclick="loadSortedLog()">Refresh List</button>
+        <button class="btn" style="background-color: var(--secondary-color);" onclick="renderLocalLog()">Refresh Sort</button>
     </div>
 
     <script>
         const scriptURL = 'https://script.google.com/macros/s/AKfycbyJvS6xWvrSly5ilprmiHHBa4OCXLvmo3HjWvZ7ihvAj3wzkeQA8wGANfJPbq0kbykwWQ/exec';
         let html5QrcodeScanner;
+        
+        // This array stores scans locally for sorting without needing the Apps Script host
+        let sessionScans = [];
 
         function switchTab(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            // Highlight the selected tab button
-            const activeTab = event ? event.target : document.querySelector('.tab-btn');
-            activeTab.classList.add('active');
+            if (viewId === 'scan-view') document.getElementById('tab-scan').classList.add('active');
+            else document.getElementById('tab-log').classList.add('active');
         }
 
         function startScanning() {
             document.getElementById('reader').style.display = 'block';
             document.getElementById('start-btn').style.display = 'none';
-            document.getElementById('status').innerText = "Requesting camera permissions...";
+            document.getElementById('status').innerText = "Requesting camera...";
 
-            // Access the environment-facing camera, falling back if unavailable
-            navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: { exact: "environment" } } 
-            })
-            .then(function(stream) {
-                // Free the stream so the camera widget can take over
-                stream.getTracks().forEach(track => track.stop());
-
-                document.getElementById('status').innerText = "Camera active...";
-                html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                    fps: 15, 
-                    qrbox: { width: 260, height: 140 } 
-                });
-                
-                html5QrcodeScanner.render(onScanSuccess);
-            })
-            .catch(function(err) {
-                console.warn("Rear camera not found or restricted. Falling back to default camera...", err);
-                
-                navigator.mediaDevices.getUserMedia({ video: true })
-                .then(function(fallbackStream) {
-                    fallbackStream.getTracks().forEach(track => track.stop());
-                    
-                    document.getElementById('status').innerText = "Camera active (Default)...";
-                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                        fps: 15, 
-                        qrbox: { width: 260, height: 140 } 
-                    });
-                    
-                    html5QrcodeScanner.render(onScanSuccess);
-                })
-                .catch(function(fallbackErr) {
-                    console.error("Camera access denied:", fallbackErr);
-                    document.getElementById('status').innerText = "Camera access denied.";
-                    alert("Unable to access the camera. Ensure permissions are enabled in your browser settings.");
-                    stopScanner();
-                });
+            // Use the environment camera (rear)
+            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", config, false);
+            
+            html5QrcodeScanner.render(onScanSuccess, (err) => {
+                // Ignore frequent frame errors
             });
         }
 
-        function stopScanner() {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear().catch(err => console.error(err));
-            }
+        function onScanSuccess(decodedText) {
+            const now = new Date();
+            const timeStr = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
+
+            // 1. Add to local list for sorting
+            sessionScans.push({ barcode: decodedText, time: timeStr });
+
+            // 2. Visual Feedback
+            document.getElementById('status').innerText = "Last Scan: " + decodedText;
+            
+            // 3. Stop scanner to prevent double scans
+            html5QrcodeScanner.clear();
             document.getElementById('reader').style.display = 'none';
             document.getElementById('start-btn').style.display = 'block';
-            document.getElementById('status').innerText = "Ready to scan";
-        }
 
-        function onScanSuccess(decodedText) {
-            document.getElementById('status').innerText = "Uploading: " + decodedText;
-            stopScanner();
-            
+            // 4. Send to Google Sheets
             fetch(scriptURL, {
                 method: 'POST',
                 mode: 'no-cors',
                 body: JSON.stringify({ barcode: decodedText })
-            })
-            .then(() => {
-                document.getElementById('status').innerText = "Sent successfully!";
-            })
-            .catch(err => {
-                document.getElementById('status').innerText = "Error uploading data.";
-                console.error(err);
-            });
+            }).catch(e => console.error("Upload failed", e));
         }
 
-        function loadSortedLog() {
-            if (typeof google === 'undefined' || !google.script) {
-                document.getElementById('sorted-list').innerHTML = `<li style="color:#999;">Only works when hosted as an Apps Script.</li>`;
+        function renderLocalLog() {
+            const list = document.getElementById('sorted-list');
+            list.innerHTML = '';
+
+            if (sessionScans.length === 0) {
+                list.innerHTML = '<li style="color: #999;">No scans in this session yet...</li>';
                 return;
             }
 
-            google.script.run.withSuccessHandler(function(data) {
-                const list = document.getElementById('sorted-list');
-                list.innerHTML = '';
-                
-                if (!data || data.length === 0) {
-                    list.innerHTML = `<li style="color:#999;">No scans found in the sheet.</li>`;
-                    return;
-                }
+            // Sort the session array by barcode ascending
+            const sorted = [...sessionScans].sort((a, b) => a.barcode.localeCompare(b.barcode, undefined, {numeric: true}));
 
-                data.forEach(row => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span><b>${row.barcode}</b></span> <span class="timestamp">${row.date}</span>`;
-                    list.appendChild(li);
-                });
-            }).getSortedScans();
+            sorted.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span><b>${item.barcode}</b></span> <span class="timestamp">${item.time}</span>`;
+                list.appendChild(li);
+            });
         }
 
         function confirmReset() {
-            const userConfirmed = confirm("Are you sure you want to clear the Google Sheet? This cannot be undone.");
-            if (userConfirmed) {
-                document.getElementById('status').innerText = "Clearing sheet...";
-                google.script.run.withSuccessHandler(function() {
-                    document.getElementById('status').innerText = "Sheet cleared.";
-                    loadSortedLog();
-                }).clearSheet();
+            if (confirm("Clear the session log? (This won't delete data from Google Sheets).")) {
+                sessionScans = [];
+                renderLocalLog();
+                document.getElementById('status').innerText = "Log cleared.";
             }
         }
     </script>
