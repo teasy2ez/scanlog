@@ -1,28 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Barcode Scanner with Sorting</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Manager</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; padding: 20px; background-color: #f8f9fa; color: #333; }
-        .btn { padding: 14px 28px; font-size: 16px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; margin: 5px; }
-        #start-btn { background-color: #007bff; }
-        #reset-btn { background-color: #dc3545; }
-        
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #222;
+            --primary-color: #0d6efd;
+            --danger-color: #dc3545;
+            --secondary-color: #6c757d;
+            --border-color: #ccc;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Large Mobile-Friendly Buttons */
+        .btn { 
+            width: 100%; 
+            padding: 20px; 
+            font-size: 1.2rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 12px; 
+            color: white; 
+            margin: 10px 0; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
+
+        #start-btn { background-color: var(--primary-color); }
+        #start-btn:active { background-color: #055160; }
+        #reset-btn { background-color: var(--danger-color); }
+
         /* Tab Navigation */
-        .tab-container { max-width: 400px; margin: 20px auto; display: flex; justify-content: space-between; background: #eee; padding: 5px; border-radius: 8px; }
-        .tab-btn { flex: 1; padding: 10px; background: none; border: none; font-size: 16px; cursor: pointer; border-radius: 6px; }
-        .tab-btn.active { background: white; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .tab-container { 
+            display: flex; 
+            justify-content: space-between; 
+            background: #e9ecef; 
+            padding: 6px; 
+            border-radius: 10px; 
+            margin-bottom: 20px;
+        }
+
+        .tab-btn { 
+            flex: 1; 
+            padding: 16px; 
+            background: none; 
+            border: none; 
+            font-size: 1.1rem; 
+            cursor: pointer; 
+            border-radius: 8px; 
+            color: var(--text-color);
+        }
+
+        .tab-btn.active { 
+            background: white; 
+            font-weight: bold; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+        }
 
         /* Container Views */
-        .view { display: none; max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .view { 
+            display: none; 
+            background: white; 
+            padding: 24px; 
+            border-radius: 16px; 
+            border: 1px solid var(--border-color); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+        }
         .view.active { display: block; }
 
-        #reader { width: 100%; max-width: 360px; margin: 15px auto; border-radius: 8px; overflow: hidden; display: none; }
-        ul { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; text-align: left; }
-        li { padding: 8px 12px; border-bottom: 1px solid #eee; font-family: monospace; display: flex; justify-content: space-between; }
+        #reader { 
+            width: 100%; 
+            max-width: 420px; 
+            margin: 20px auto; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            background: #000;
+        }
+
+        #status {
+            font-size: 1.1rem;
+            margin: 15px 0;
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
+
+        ul { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            text-align: left; 
+        }
+        li { 
+            padding: 14px; 
+            border-bottom: 1px solid #eee; 
+            font-family: monospace; 
+            font-size: 1.1rem;
+            display: flex; 
+            justify-content: space-between; 
+        }
         li:last-child { border-bottom: none; }
-        .timestamp { color: #888; font-size: 11px; }
+        .timestamp { color: #666; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -44,15 +141,16 @@
 
     <div id="log-view" class="view">
         <h3>UPC Scans (Ascending Order)</h3>
+        <br>
         <ul id="sorted-list">
             <li style="color: #999;">Loading scans...</li>
         </ul>
         <br>
-        <button class="btn" style="background-color:#6c757d; padding: 8px 16px; font-size: 14px;" onclick="loadSortedLog()">Refresh List</button>
+        <button class="btn" style="background-color: var(--secondary-color);" onclick="loadSortedLog()">Refresh List</button>
     </div>
 
     <script>
-        const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE'; // Replace with your web app URL
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbyJvS6xWvrSly5ilprmiHHBa4OCXLvmo3HjWvZ7ihvAj3wzkeQA8wGANfJPbq0kbykwWQ/exec'; // Replace with your web app URL
         let html5QrcodeScanner;
 
         function switchTab(viewId) {
@@ -60,25 +158,48 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            // Highlight active tab
-            event.target.classList.add('active');
+            // Set the active button class on click (using event delegation fallback or direct target)
+            const activeTab = event ? event.target : document.querySelector('.tab-btn');
+            activeTab.classList.add('active');
         }
 
         function startScanning() {
             document.getElementById('reader').style.display = 'block';
             document.getElementById('start-btn').style.display = 'none';
-            document.getElementById('status').innerText = "Camera active...";
+            document.getElementById('status').innerText = "Requesting camera permissions...";
 
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                fps: 15, 
-                qrbox: { width: 250, height: 120 } 
-            });
-            html5QrcodeScanner.render(onScanSuccess);
+            // Request hardware permission explicitly for mobile browsers
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .then(function(stream) {
+                    stream.getTracks().forEach(track => track.stop()); // Stop test stream so the scanner can take over
+
+                    document.getElementById('status').innerText = "Camera active...";
+                    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                        fps: 15, 
+                        qrbox: { width: 260, height: 140 } 
+                    });
+                    html5QrcodeScanner.render(onScanSuccess);
+                })
+                .catch(function(err) {
+                    console.error(err);
+                    document.getElementById('status').innerText = "Camera access denied.";
+                    alert("Unable to access the camera. Please ensure permissions are enabled in your browser settings.");
+                    stopScanner();
+                });
+        }
+
+        function stopScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(err => console.error(err));
+            }
+            document.getElementById('reader').style.display = 'none';
+            document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('status').innerText = "Ready to scan";
         }
 
         function onScanSuccess(decodedText) {
             document.getElementById('status').innerText = "Uploading: " + decodedText;
-            html5QrcodeScanner.clear();
+            stopScanner();
             
             fetch(scriptURL, {
                 method: 'POST',
@@ -87,8 +208,6 @@
             })
             .then(() => {
                 document.getElementById('status').innerText = "Sent successfully!";
-                document.getElementById('reader').style.display = 'none';
-                document.getElementById('start-btn').style.display = 'inline-block';
             })
             .catch(err => {
                 document.getElementById('status').innerText = "Error uploading data.";
@@ -96,8 +215,12 @@
             });
         }
 
-        // Functions to query the server for the sorted list
         function loadSortedLog() {
+            if (typeof google === 'undefined' || !google.script) {
+                document.getElementById('sorted-list').innerHTML = `<li style="color:#999;">Only works when hosted as an Apps Script.</li>`;
+                return;
+            }
+
             google.script.run.withSuccessHandler(function(data) {
                 const list = document.getElementById('sorted-list');
                 list.innerHTML = '';
@@ -115,14 +238,13 @@
             }).getSortedScans();
         }
 
-        // Confirmation dialog for the reset button
         function confirmReset() {
             const userConfirmed = confirm("Are you sure you want to clear the Google Sheet? This cannot be undone.");
             if (userConfirmed) {
                 document.getElementById('status').innerText = "Clearing sheet...";
                 google.script.run.withSuccessHandler(function() {
                     document.getElementById('status').innerText = "Sheet cleared.";
-                    loadSortedLog(); // Refresh the list
+                    loadSortedLog();
                 }).clearSheet();
             }
         }
