@@ -18,30 +18,31 @@
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             text-align: center; 
-            padding: 20px; 
+            padding: 24px; 
             background-color: var(--bg-color); 
             color: var(--text-color);
-            max-width: 500px;
+            max-width: 540px;
             margin: 0 auto;
         }
 
         h2 {
-            font-size: 1.8rem;
+            font-size: 2rem;
             margin-bottom: 1.5rem;
         }
 
         /* Large Mobile-Friendly Buttons */
         .btn { 
             width: 100%; 
-            padding: 20px; 
-            font-size: 1.2rem; 
+            padding: 22px; 
+            font-size: 1.3rem; 
             font-weight: bold; 
             cursor: pointer; 
             border: none; 
             border-radius: 12px; 
             color: white; 
-            margin: 10px 0; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+            margin: 12px 0; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            transition: background-color 0.2s;
         }
 
         #start-btn { background-color: var(--primary-color); }
@@ -53,17 +54,17 @@
             display: flex; 
             justify-content: space-between; 
             background: #e9ecef; 
-            padding: 6px; 
-            border-radius: 10px; 
-            margin-bottom: 20px;
+            padding: 8px; 
+            border-radius: 12px; 
+            margin-bottom: 24px;
         }
 
         .tab-btn { 
             flex: 1; 
-            padding: 16px; 
+            padding: 18px; 
             background: none; 
             border: none; 
-            font-size: 1.1rem; 
+            font-size: 1.15rem; 
             cursor: pointer; 
             border-radius: 8px; 
             color: var(--text-color);
@@ -72,32 +73,33 @@
         .tab-btn.active { 
             background: white; 
             font-weight: bold; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15); 
         }
 
         /* Container Views */
         .view { 
             display: none; 
             background: white; 
-            padding: 24px; 
+            padding: 28px; 
             border-radius: 16px; 
             border: 1px solid var(--border-color); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08); 
         }
         .view.active { display: block; }
 
         #reader { 
             width: 100%; 
-            max-width: 420px; 
+            max-width: 440px; 
             margin: 20px auto; 
-            border-radius: 10px; 
+            border-radius: 12px; 
             overflow: hidden; 
             background: #000;
+            min-height: 240px;
         }
 
         #status {
-            font-size: 1.1rem;
-            margin: 15px 0;
+            font-size: 1.2rem;
+            margin: 18px 0;
             color: var(--secondary-color);
             font-weight: 500;
         }
@@ -111,15 +113,15 @@
             text-align: left; 
         }
         li { 
-            padding: 14px; 
+            padding: 16px; 
             border-bottom: 1px solid #eee; 
             font-family: monospace; 
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             display: flex; 
             justify-content: space-between; 
         }
         li:last-child { border-bottom: none; }
-        .timestamp { color: #666; font-size: 0.9rem; }
+        .timestamp { color: #666; font-size: 0.95rem; }
     </style>
 </head>
 <body>
@@ -150,7 +152,7 @@
     </div>
 
     <script>
-        const scriptURL = 'https://script.google.com/macros/s/AKfycbyJvS6xWvrSly5ilprmiHHBa4OCXLvmo3HjWvZ7ihvAj3wzkeQA8wGANfJPbq0kbykwWQ/exec'; // Replace with your web app URL
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbyJvS6xWvrSly5ilprmiHHBa4OCXLvmo3HjWvZ7ihvAj3wzkeQA8wGANfJPbq0kbykwWQ/exec';
         let html5QrcodeScanner;
 
         function switchTab(viewId) {
@@ -158,7 +160,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            // Set the active button class on click (using event delegation fallback or direct target)
+            // Highlight the selected tab button
             const activeTab = event ? event.target : document.querySelector('.tab-btn');
             activeTab.classList.add('active');
         }
@@ -168,24 +170,44 @@
             document.getElementById('start-btn').style.display = 'none';
             document.getElementById('status').innerText = "Requesting camera permissions...";
 
-            // Request hardware permission explicitly for mobile browsers
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-                .then(function(stream) {
-                    stream.getTracks().forEach(track => track.stop()); // Stop test stream so the scanner can take over
+            // Access the environment-facing camera, falling back if unavailable
+            navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: { exact: "environment" } } 
+            })
+            .then(function(stream) {
+                // Free the stream so the camera widget can take over
+                stream.getTracks().forEach(track => track.stop());
 
-                    document.getElementById('status').innerText = "Camera active...";
+                document.getElementById('status').innerText = "Camera active...";
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                    fps: 15, 
+                    qrbox: { width: 260, height: 140 } 
+                });
+                
+                html5QrcodeScanner.render(onScanSuccess);
+            })
+            .catch(function(err) {
+                console.warn("Rear camera not found or restricted. Falling back to default camera...", err);
+                
+                navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(fallbackStream) {
+                    fallbackStream.getTracks().forEach(track => track.stop());
+                    
+                    document.getElementById('status').innerText = "Camera active (Default)...";
                     html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                         fps: 15, 
                         qrbox: { width: 260, height: 140 } 
                     });
+                    
                     html5QrcodeScanner.render(onScanSuccess);
                 })
-                .catch(function(err) {
-                    console.error(err);
+                .catch(function(fallbackErr) {
+                    console.error("Camera access denied:", fallbackErr);
                     document.getElementById('status').innerText = "Camera access denied.";
-                    alert("Unable to access the camera. Please ensure permissions are enabled in your browser settings.");
+                    alert("Unable to access the camera. Ensure permissions are enabled in your browser settings.");
                     stopScanner();
                 });
+            });
         }
 
         function stopScanner() {
