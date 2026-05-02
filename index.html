@@ -173,7 +173,7 @@
         
         <div class="input-group">
             <label for="read-sheet-select">Select Sheet to Display:</label>
-            <select id="read-sheet-select">
+            <select id="read-sheet-select" onchange="loadSortedLog()">
                 <option value="">-- Loading Sheets --</option>
             </select>
         </div>
@@ -188,7 +188,7 @@
 
     <script>
         // REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-        const API_URL = 'https://script.google.com/macros/s/AKfycbyxngeHRiIdfrQSReNgd_Z0uiJJVjYlbVBjL2hRMciM88b1_SEk-kAC9hjCPFTISTXtAg/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycby2B6aPP9JXWTGh3unCq3OkaYCz4-QLKp7Mid30wX9IA7RVajUVHu2IlaVimVsSbPoIJQ/exec';
         
         let html5QrCode;
         let sessionScans = [];
@@ -207,25 +207,19 @@
             }
         }
 
-        // On page load, fetch available sheets for the dropdowns
+        // On page load, fetch sheets
         document.addEventListener("DOMContentLoaded", function() {
-            loadSheetDropdowns();
+            loadDropdownsAndData();
         });
 
-        function loadSheetDropdowns() {
-            // Because google.script is inaccessible, make a direct call to the backend
-            google.script.run.withSuccessHandler(populateDropdowns).getSheetNames();
-        }
-        
-        // Fallback for when script.run isn't accessible
         function loadDropdownsAndData() {
-            if (typeof google === 'undefined' || !google.script) {
-                fetch(API_URL + "?action=getSheets")
-                    .then(response => response.json())
-                    .catch(() => ["Sheet1"]); // Dummy fallback
-            } else {
-                google.script.run.withSuccessHandler(populateDropdowns).getSheetNames();
-            }
+            fetch(API_URL + "?action=getSheets")
+                .then(response => response.json())
+                .then(populateDropdowns)
+                .catch(err => {
+                    console.error("Could not load sheets", err);
+                    document.getElementById('write-sheet-select').innerHTML = '<option>Error loading sheets</option>';
+                });
             loadSortedLog();
         }
 
@@ -293,10 +287,10 @@
             newScan.innerHTML = `<span><b>${decodedText}</b></span> <span>${timeString}</span>`;
             logElement.prepend(newScan);
 
-            // Get the subsheet the user selected
+            // Get selected target sheet
             const selectedSheet = document.getElementById('write-sheet-select').value;
 
-            // Send data to the subsheet
+            // Send data using API
             fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -345,7 +339,10 @@
         }
 
         function loadSortedLog() {
-            fetch(API_URL)
+            // Get selected dropdown name for reading
+            const selectedSheet = document.getElementById('read-sheet-select').value;
+            
+            fetch(API_URL + "?sheetName=" + encodeURIComponent(selectedSheet))
                 .then(response => response.json())
                 .then(populateSortedList)
                 .catch(err => {
