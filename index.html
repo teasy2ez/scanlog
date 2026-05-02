@@ -40,6 +40,10 @@
 
         .btn:active { background-color: #0056b3; }
         
+        .btn-secondary {
+            background-color: var(--secondary-color);
+        }
+        
         .btn-danger {
             background-color: var(--danger-color);
             width: auto;
@@ -141,6 +145,8 @@
             <li style="color: #666; text-align: center; justify-content: center;">No scans in this session yet</li>
         </ul>
 
+        <button class="btn btn-secondary" onclick="handleCreateNewSheet()">Create New Sheet</button>
+        <br>
         <button class="btn btn-danger" onclick="confirmReset()">Clear Google Sheet</button>
     </div>
 
@@ -154,10 +160,9 @@
     </div>
 
     <script>
-        // REPLACE THIS WITH YOUR DEPLOYED GOOGLE APPS SCRIPT URL
+        // REPLACE THIS WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
         const API_URL = 'https://script.google.com/macros/s/AKfycbzqRLhr-aplECnbyUfoJdASLT8zBj56Q3WV-YkaJx5nZviKJk_rF0LLH06DyUBDqE6xHw/exec';
         let html5QrCode;
-        let sessionScans = [];
 
         function switchTab(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -187,7 +192,6 @@
                 (errorMessage) => { /* Ignore frame errors */ }
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
-                
                 html5QrCode.start(
                     { facingMode: "user" },
                     config,
@@ -204,14 +208,9 @@
         function onScanSuccess(decodedText) {
             document.getElementById('status').innerText = "Scanned: " + decodedText;
 
-            // Log to local session array
             const now = new Date();
             const timeString = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
-            
-            sessionScans.unshift({ barcode: decodedText, time: timeString });
-            if (sessionScans.length > 5) sessionScans.pop();
 
-            // Update UI list for recent scans
             const logElement = document.getElementById('scan-log');
             if (logElement.innerHTML.includes("No scans in this session yet")) {
                 logElement.innerHTML = '';
@@ -227,7 +226,7 @@
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ barcode: decodedText })
-            }).then(response => {
+            }).then(() => {
                 document.getElementById('status').innerText = "Sent successfully!";
             }).catch(err => {
                 document.getElementById('status').innerText = "Sent (offline or cross-origin).";
@@ -239,22 +238,32 @@
 
         function resetScanner() {
             if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode = null; 
+                html5QrCode = null;
                 location.reload(); 
             }
+        }
+
+        function handleCreateNewSheet() {
+            if (typeof google === 'undefined' || !google.script) {
+                alert("This function can only be run inside the Google Apps Script environment.");
+                return;
+            }
+
+            document.getElementById('status').innerText = "Creating new sheet...";
+            google.script.run.withSuccessHandler(function(sheetName) {
+                document.getElementById('status').innerText = "Created: " + sheetName;
+                alert("Successfully created " + sheetName);
+            }).createNewSheet();
         }
 
         // Fetch sorted data via standard web API (compatible with Cloudflare)
         function loadSortedLog() {
             if (typeof google === 'undefined' || !google.script) {
-                // Fetch from your backend Apps Script URL to get sorted data if running in cloudflare mode
                 fetch(API_URL + '?action=getSortedScans')
                     .then(response => response.json())
-                    .then(data => {
-                        populateSortedList(data);
-                    }).catch(err => {
-                        console.warn("Could not fetch data via REST API. Defaulting to local session log.");
-                        populateSortedList(sessionScans);
+                    .then(populateSortedList)
+                    .catch(err => {
+                        document.getElementById('sorted-list').innerHTML = `<li style="color:#666;">Cannot load from Google Sheets in Cloudflare mode, but session captures are working.</li>`;
                     });
             } else {
                 google.script.run.withSuccessHandler(populateSortedList).getSortedScans();
@@ -285,7 +294,7 @@
                         loadSortedLog();
                     }).clearSheet();
                 } else {
-                    alert("Clearing from Cloudflare requires an authorized API endpoint.");
+                    alert("This feature is only available in the Google environment.");
                 }
             }
         }
