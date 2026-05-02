@@ -149,9 +149,11 @@
 
     <script>
         // REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-        const API_URL = 'https://script.google.com/macros/s/AKfycbwLQIe_YqeS45evemyj_zx2bTVNA_MfmDfhi4Jh4THFNxNyeA3_d8K4De0PmXdNHgQHtw/exec';
+        const API_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+        
         let html5QrCode;
         let sessionScans = [];
+        let isCooldown = false;
 
         function switchTab(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -167,23 +169,26 @@
         }
 
         function startScanner() {
+            if (isCooldown) return; 
+
             document.getElementById('start-btn').style.display = 'none';
             document.getElementById('reader').style.display = 'block';
             document.getElementById('status').innerText = "Using camera to scan...";
 
+            html5QrCodeConfig = { fps: 10, qrbox: { width: 250, height: 150 } };
             html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
 
+            html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start(
                 { facingMode: "environment" },
-                config,
+                htmlQrCodeConfig,
                 onScanSuccess,
                 (errorMessage) => { /* Ignore frame errors */ }
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
                 html5QrCode.start(
                     { facingMode: "user" },
-                    config,
+                    htmlQrCodeConfig,
                     onScanSuccess,
                     (errorMessage) => {}
                 ).catch(fallbackErr => {
@@ -195,16 +200,17 @@
         }
 
         function onScanSuccess(decodedText) {
-            document.getElementById('status').innerText = "Scanned: " + decodedText;
+            if (isCooldown) return;
+
+            isCooldown = true;
+            document.getElementById('status').innerText = "Scanned: " + decodedText + ". Please wait...";
 
             const now = new Date();
             const timeString = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
 
-            // 1. Update session array
             sessionScans.unshift({ barcode: decodedText, time: timeString });
             if (sessionScans.length > 5) sessionScans.pop();
 
-            // 2. Update UI recent scans element
             const logElement = document.getElementById('scan-log');
             if (logElement.innerHTML.includes("No scans in this session yet")) {
                 logElement.innerHTML = '';
@@ -214,27 +220,27 @@
             newScan.innerHTML = `<span><b>${decodedText}</b></span> <span>${timeString}</span>`;
             logElement.prepend(newScan);
 
-            // 3. Send data over the web API
+            // Send data using API
             fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ barcode: decodedText })
             }).then(() => {
-                document.getElementById('status').innerText = "Sent successfully!";
+                console.log("Sent successfully");
             }).catch(err => {
-                document.getElementById('status').innerText = "Sent (offline or cross-origin).";
-                console.error(err);
+                console.error("Error sending data", err);
             });
 
-            // Clean up the camera state properly
             setTimeout(() => {
+                document.getElementById('status').innerText = "Wait period over. Ready to scan.";
+                isCooldown = false;
                 resetScanner();
-            }, 1500);
+            }, 3000); 
         }
 
         function resetScanner() {
-            if (html5QrCode) {
+            if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().then(() => {
                     html5QrCode.clear();
                     document.getElementById('reader').style.display = 'none';
@@ -245,20 +251,24 @@
         }
 
         function handleCreateNewSheet() {
-            if (typeof google === 'undefined' || !google.script) {
-                alert("Creation features are only accessible inside the Google Environment. Create the sheet from the Apps Script dashboard.");
-                return;
-            }
-
             document.getElementById('status').innerText = "Creating new sheet...";
-            google.script.run.withSuccessHandler(function(sheetName) {
-                document.getElementById('status').innerText = "Created: " + sheetName;
-                alert("Successfully created " + sheetName);
-            }).createNewSheet();
+
+            // Use Cloudflare-compatible fetch method
+            fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Mode must remain no-cors to talk directly to Google Apps Script
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "createNewSheet" })
+            }).then(() => {
+                document.getElementById('status').innerText = "Sheet created!";
+                alert("Successfully created a new sheet in the file.");
+            }).catch(err => {
+                document.getElementById('status').innerText = "Error creating sheet.";
+                console.error(err);
+            });
         }
 
         function loadSortedLog() {
-            // Fetch sorted data from Google Sheets using GET request
             fetch(API_URL)
                 .then(response => response.json())
                 .then(populateSortedList)
