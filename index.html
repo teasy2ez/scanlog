@@ -285,14 +285,12 @@
 
         function confirmReset() {
             if (confirm("Are you sure you want to clear the Google Sheet?")) {
-                if (typeof google !== 'undefined' && google.script) {
-                    google.script.run.withSuccessHandler(function() {
-                        document.getElementById('status').innerText = "Sheet cleared.";
-                        loadSortedLog();
-                    }).clearSheet();
-                } else {
-                    alert("This feature is only available within the Google environment.");
-                }
+                google.script.run.withSuccessHandler(function() {
+                    document.getElementById('status').innerText = "Sheet cleared.";
+                    loadSortedLog();
+                }).clearSheet();
+            } else {
+                alert("This feature is only available within the Google environment.");
             }
         }
     </script>
