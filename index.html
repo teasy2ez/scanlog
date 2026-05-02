@@ -40,9 +40,7 @@
 
         .btn:active { background-color: #0056b3; }
         
-        .btn-secondary {
-            background-color: var(--secondary-color);
-        }
+        .btn-secondary { background-color: var(--secondary-color); }
         
         .btn-danger {
             background-color: var(--danger-color);
@@ -160,8 +158,8 @@
     </div>
 
     <script>
-        // REPLACE THIS WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-        const API_URL = 'https://script.google.com/macros/s/AKfycbzqRLhr-aplECnbyUfoJdASLT8zBj56Q3WV-YkaJx5nZviKJk_rF0LLH06DyUBDqE6xHw/exec';
+        // REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxmCRf33m9zbOakF63xdTz4cA3l6fKZn19oLasEx4UmIovrR_C_mTXpG0aWTI8xWhTqCg/exec';
         let html5QrCode;
 
         function switchTab(viewId) {
@@ -192,6 +190,7 @@
                 (errorMessage) => { /* Ignore frame errors */ }
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
+                
                 html5QrCode.start(
                     { facingMode: "user" },
                     config,
@@ -244,8 +243,9 @@
         }
 
         function handleCreateNewSheet() {
+            // Note: Cloudflare doesn't know what google.script.run is so we handle this securely
             if (typeof google === 'undefined' || !google.script) {
-                alert("This function can only be run inside the Google Apps Script environment.");
+                alert("Creation with Apps Script functions is currently disconnected in Cloudflare.");
                 return;
             }
 
@@ -256,18 +256,15 @@
             }).createNewSheet();
         }
 
-        // Fetch sorted data via standard web API (compatible with Cloudflare)
         function loadSortedLog() {
-            if (typeof google === 'undefined' || !google.script) {
-                fetch(API_URL + '?action=getSortedScans')
-                    .then(response => response.json())
-                    .then(populateSortedList)
-                    .catch(err => {
-                        document.getElementById('sorted-list').innerHTML = `<li style="color:#666;">Cannot load from Google Sheets in Cloudflare mode, but session captures are working.</li>`;
-                    });
-            } else {
-                google.script.run.withSuccessHandler(populateSortedList).getSortedScans();
-            }
+            // Read sorted data from Apps Script via a standard fetch (works on Cloudflare)
+            fetch(API_URL)
+                .then(response => response.json())
+                .then(populateSortedList)
+                .catch(err => {
+                    document.getElementById('sorted-list').innerHTML = `<li style="color:#666;">Cannot connect to database over CORS. Check App configuration.</li>`;
+                    console.error(err);
+                });
         }
 
         function populateSortedList(data) {
@@ -294,7 +291,7 @@
                         loadSortedLog();
                     }).clearSheet();
                 } else {
-                    alert("This feature is only available in the Google environment.");
+                    alert("This feature is only available within the Google environment.");
                 }
             }
         }
