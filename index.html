@@ -41,14 +41,6 @@
         .btn:active { background-color: #0056b3; }
         
         .btn-secondary { background-color: var(--secondary-color); }
-        
-        .btn-danger {
-            background-color: var(--danger-color);
-            width: auto;
-            padding: 10px 20px;
-            font-size: 14px;
-            margin-top: 20px;
-        }
 
         /* Tab Navigation */
         .tab-container {
@@ -142,7 +134,7 @@
         <ul id="scan-log">
             <li style="color: #666; text-align: center; justify-content: center;">No scans in this session yet</li>
         </ul>
-
+        
         <button class="btn btn-secondary" onclick="handleCreateNewSheet()">Create New Sheet</button>
     </div>
 
@@ -157,8 +149,9 @@
 
     <script>
         // REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxmCRf33m9zbOakF63xdTz4cA3l6fKZn19oLasEx4UmIovrR_C_mTXpG0aWTI8xWhTqCg/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwLQIe_YqeS45evemyj_zx2bTVNA_MfmDfhi4Jh4THFNxNyeA3_d8K4De0PmXdNHgQHtw/exec';
         let html5QrCode;
+        let sessionScans = [];
 
         function switchTab(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -188,7 +181,6 @@
                 (errorMessage) => { /* Ignore frame errors */ }
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
-                
                 html5QrCode.start(
                     { facingMode: "user" },
                     config,
@@ -208,6 +200,11 @@
             const now = new Date();
             const timeString = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
 
+            // 1. Update session array
+            sessionScans.unshift({ barcode: decodedText, time: timeString });
+            if (sessionScans.length > 5) sessionScans.pop();
+
+            // 2. Update UI recent scans element
             const logElement = document.getElementById('scan-log');
             if (logElement.innerHTML.includes("No scans in this session yet")) {
                 logElement.innerHTML = '';
@@ -217,7 +214,7 @@
             newScan.innerHTML = `<span><b>${decodedText}</b></span> <span>${timeString}</span>`;
             logElement.prepend(newScan);
 
-            // Send to Google Sheets and turn off camera
+            // 3. Send data over the web API
             fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -230,20 +227,26 @@
                 console.error(err);
             });
 
-            resetScanner();
+            // Clean up the camera state properly
+            setTimeout(() => {
+                resetScanner();
+            }, 1500);
         }
 
         function resetScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode = null;
-                location.reload(); 
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    document.getElementById('reader').style.display = 'none';
+                    document.getElementById('start-btn').style.display = 'block';
+                    document.getElementById('status').innerText = "Status: Ready to scan";
+                }).catch(err => console.error(err));
             }
         }
 
         function handleCreateNewSheet() {
-            // Note: Cloudflare doesn't know what google.script.run is so we handle this securely
             if (typeof google === 'undefined' || !google.script) {
-                alert("Creation with Apps Script functions is currently disconnected in Cloudflare.");
+                alert("Creation features are only accessible inside the Google Environment. Create the sheet from the Apps Script dashboard.");
                 return;
             }
 
@@ -255,13 +258,13 @@
         }
 
         function loadSortedLog() {
-            // Read sorted data from Apps Script via a standard fetch (works on Cloudflare)
+            // Fetch sorted data from Google Sheets using GET request
             fetch(API_URL)
                 .then(response => response.json())
                 .then(populateSortedList)
                 .catch(err => {
-                    document.getElementById('sorted-list').innerHTML = `<li style="color:#666;">Cannot connect to database over CORS. Check App configuration.</li>`;
-                    console.error(err);
+                    console.warn("Could not retrieve directly from sheets via REST. Reverting to session list.");
+                    populateSortedList(sessionScans);
                 });
         }
 
