@@ -24,14 +24,18 @@
 
         h2 { margin-bottom: 1.2rem; }
 
-        .btn {
+        .btn, select {
             width: 100%;
-            padding: 20px;
-            font-size: 18px;
+            padding: 15px;
+            font-size: 16px;
             font-weight: bold;
-            margin: 10px 0;
-            border: none;
+            margin: 8px 0;
             border-radius: 12px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            border: none;
             cursor: pointer;
             color: white;
             background-color: var(--primary-color);
@@ -39,8 +43,13 @@
         }
 
         .btn:active { background-color: #0056b3; }
-        
         .btn-secondary { background-color: var(--secondary-color); }
+
+        select {
+            border: 1px solid #ccc;
+            background-color: #fff;
+            color: #333;
+        }
 
         /* Tab Navigation */
         .tab-container {
@@ -114,6 +123,20 @@
             justify-content: space-between;
             border-bottom: 1px solid #eee;
         }
+        
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        
+        .input-group label {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--secondary-color);
+            display: block;
+            margin-bottom: 4px;
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
@@ -122,10 +145,18 @@
 
     <div class="tab-container">
         <button id="tab-scan" class="tab-btn active" onclick="switchTab('scan-view')">Scanner</button>
-        <button id="tab-log" class="tab-btn" onclick="switchTab('log-view'); loadSortedLog();">Sorted Data</button>
+        <button id="tab-log" class="tab-btn" onclick="switchTab('log-view'); loadDropdownsAndData();">Sorted Data</button>
     </div>
 
     <div id="scan-view" class="view active">
+        
+        <div class="input-group">
+            <label for="write-sheet-select">Select Sheet to Write To:</label>
+            <select id="write-sheet-select">
+                <option value="">-- Loading Sheets --</option>
+            </select>
+        </div>
+
         <button id="start-btn" class="btn" onclick="startScanner()">Open Camera & Scan</button>
         <div id="reader"></div>
         <p id="status">Status: Ready to scan</p>
@@ -139,17 +170,25 @@
     </div>
 
     <div id="log-view" class="view">
+        
+        <div class="input-group">
+            <label for="read-sheet-select">Select Sheet to Display:</label>
+            <select id="read-sheet-select">
+                <option value="">-- Loading Sheets --</option>
+            </select>
+        </div>
+        
         <h3>UPC Scans (Ascending Order)</h3>
         <ul id="sorted-list">
             <li style="color: #666; text-align: center; justify-content: center;">Loading scans...</li>
         </ul>
         <br>
-        <button class="btn" style="background-color: var(--secondary-color); width: auto;" onclick="loadSortedLog()">Refresh History</button>
+        <button class="btn" style="background-color: var(--secondary-color); width: auto;" onclick="loadDropdownsAndData()">Refresh Data</button>
     </div>
 
     <script>
         // REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL
-        const API_URL = 'https://script.google.com/macros/s/AKfycbzb214Vi4vDdIio2r36VSJb7mv0zx25hZp5MgfAz3j9bJoIRdp_N2LuqutQudOHv0CO5Q/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyxngeHRiIdfrQSReNgd_Z0uiJJVjYlbVBjL2hRMciM88b1_SEk-kAC9hjCPFTISTXtAg/exec';
         
         let html5QrCode;
         let sessionScans = [];
@@ -168,6 +207,41 @@
             }
         }
 
+        // On page load, fetch available sheets for the dropdowns
+        document.addEventListener("DOMContentLoaded", function() {
+            loadSheetDropdowns();
+        });
+
+        function loadSheetDropdowns() {
+            // Because google.script is inaccessible, make a direct call to the backend
+            google.script.run.withSuccessHandler(populateDropdowns).getSheetNames();
+        }
+        
+        // Fallback for when script.run isn't accessible
+        function loadDropdownsAndData() {
+            if (typeof google === 'undefined' || !google.script) {
+                fetch(API_URL + "?action=getSheets")
+                    .then(response => response.json())
+                    .catch(() => ["Sheet1"]); // Dummy fallback
+            } else {
+                google.script.run.withSuccessHandler(populateDropdowns).getSheetNames();
+            }
+            loadSortedLog();
+        }
+
+        function populateDropdowns(sheetNames) {
+            const writeSelect = document.getElementById('write-sheet-select');
+            const readSelect = document.getElementById('read-sheet-select');
+            
+            writeSelect.innerHTML = '';
+            readSelect.innerHTML = '';
+
+            sheetNames.forEach(function(name) {
+                writeSelect.add(new Option(name, name));
+                readSelect.add(new Option(name, name));
+            });
+        }
+
         function startScanner() {
             if (isCooldown) return; 
 
@@ -178,17 +252,16 @@
             html5QrCodeConfig = { fps: 10, qrbox: { width: 250, height: 150 } };
             html5QrCode = new Html5Qrcode("reader");
 
-            html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start(
                 { facingMode: "environment" },
-                htmlQrCodeConfig,
+                html5QrCodeConfig,
                 onScanSuccess,
                 (errorMessage) => { /* Ignore frame errors */ }
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
                 html5QrCode.start(
                     { facingMode: "user" },
-                    htmlQrCodeConfig,
+                    html5QrCodeConfig,
                     onScanSuccess,
                     (errorMessage) => {}
                 ).catch(fallbackErr => {
@@ -220,12 +293,15 @@
             newScan.innerHTML = `<span><b>${decodedText}</b></span> <span>${timeString}</span>`;
             logElement.prepend(newScan);
 
-            // Send data using API
+            // Get the subsheet the user selected
+            const selectedSheet = document.getElementById('write-sheet-select').value;
+
+            // Send data to the subsheet
             fetch(API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ barcode: decodedText })
+                body: JSON.stringify({ barcode: decodedText, sheetName: selectedSheet })
             }).then(() => {
                 console.log("Sent successfully");
             }).catch(err => {
@@ -253,15 +329,15 @@
         function handleCreateNewSheet() {
             document.getElementById('status').innerText = "Creating new sheet...";
 
-            // Use Cloudflare-compatible fetch method
             fetch(API_URL, {
                 method: 'POST',
-                mode: 'no-cors', // Mode must remain no-cors to talk directly to Google Apps Script
+                mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: "createNewSheet" })
             }).then(() => {
                 document.getElementById('status').innerText = "Sheet created!";
-                alert("Successfully created a new sheet in the file.");
+                alert("Successfully created a new sheet in the file. Please Refresh!");
+                loadDropdownsAndData();
             }).catch(err => {
                 document.getElementById('status').innerText = "Error creating sheet.";
                 console.error(err);
