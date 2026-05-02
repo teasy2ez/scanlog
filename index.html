@@ -24,7 +24,6 @@
 
         h2 { margin-bottom: 1.2rem; }
 
-        /* Big buttons for mobile devices */
         .btn {
             width: 100%;
             padding: 20px;
@@ -75,7 +74,6 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        /* Container Views */
         .view {
             display: none;
             background: white;
@@ -126,7 +124,7 @@
 </head>
 <body>
 
-    <h2>Tristan's ScanLog</h2>
+    <h2>Inventory Manager</h2>
 
     <div class="tab-container">
         <button id="tab-scan" class="tab-btn active" onclick="switchTab('scan-view')">Scanner</button>
@@ -156,7 +154,8 @@
     </div>
 
     <script>
-        const API_URL = 'https://script.google.com/macros/s/AKfycbzYjq2bH0MNCRhsmkBqZN8IE_tfYMRALcwy4ZX67Fi1rI4dVeXUnm2dEFPDB1hBElEW1A/exec'; 
+        // REPLACE THIS WITH YOUR DEPLOYED GOOGLE APPS SCRIPT URL
+        const API_URL = 'https://script.google.com/macros/s/AKfycbzqRLhr-aplECnbyUfoJdASLT8zBj56Q3WV-YkaJx5nZviKJk_rF0LLH06DyUBDqE6xHw/exec';
         let html5QrCode;
         let sessionScans = [];
 
@@ -181,7 +180,6 @@
             html5QrCode = new Html5Qrcode("reader");
             const config = { fps: 10, qrbox: { width: 250, height: 150 } };
 
-            // Request the rear-facing camera to avoid black screens
             html5QrCode.start(
                 { facingMode: "environment" },
                 config,
@@ -190,7 +188,6 @@
             ).catch(err => {
                 console.warn("Rear camera not available. Trying default camera.", err);
                 
-                // Fallback to the default camera
                 html5QrCode.start(
                     { facingMode: "user" },
                     config,
@@ -207,14 +204,14 @@
         function onScanSuccess(decodedText) {
             document.getElementById('status').innerText = "Scanned: " + decodedText;
 
-            // Log to the local session array
+            // Log to local session array
             const now = new Date();
             const timeString = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
             
             sessionScans.unshift({ barcode: decodedText, time: timeString });
             if (sessionScans.length > 5) sessionScans.pop();
 
-            // Update UI list
+            // Update UI list for recent scans
             const logElement = document.getElementById('scan-log');
             if (logElement.innerHTML.includes("No scans in this session yet")) {
                 logElement.innerHTML = '';
@@ -230,42 +227,66 @@
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ barcode: decodedText })
-            }).catch(err => console.error(err));
+            }).then(response => {
+                document.getElementById('status').innerText = "Sent successfully!";
+            }).catch(err => {
+                document.getElementById('status').innerText = "Sent (offline or cross-origin).";
+                console.error(err);
+            });
 
             resetScanner();
         }
 
         function resetScanner() {
             if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode = null; // Clear reference
-                location.reload(); // Hard reset (ensures camera isn't locked in memory)
+                html5QrCode = null; 
+                location.reload(); 
             }
         }
 
+        // Fetch sorted data via standard web API (compatible with Cloudflare)
         function loadSortedLog() {
-            google.script.run.withSuccessHandler(function(data) {
-                const list = document.getElementById('sorted-list');
-                list.innerHTML = '';
+            if (typeof google === 'undefined' || !google.script) {
+                // Fetch from your backend Apps Script URL to get sorted data if running in cloudflare mode
+                fetch(API_URL + '?action=getSortedScans')
+                    .then(response => response.json())
+                    .then(data => {
+                        populateSortedList(data);
+                    }).catch(err => {
+                        console.warn("Could not fetch data via REST API. Defaulting to local session log.");
+                        populateSortedList(sessionScans);
+                    });
+            } else {
+                google.script.run.withSuccessHandler(populateSortedList).getSortedScans();
+            }
+        }
 
-                if (!data || data.length === 0) {
-                    list.innerHTML = `<li style="color:#666;">No scans found in the sheet.</li>`;
-                    return;
-                }
+        function populateSortedList(data) {
+            const list = document.getElementById('sorted-list');
+            list.innerHTML = '';
 
-                data.forEach(row => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span><b>${row.barcode}</b></span> <span style="color:#666;">${row.date}</span>`;
-                    list.appendChild(li);
-                });
-            }).getSortedScans();
+            if (!data || data.length === 0) {
+                list.innerHTML = `<li style="color:#666;">No scans found in the sheet.</li>`;
+                return;
+            }
+
+            data.forEach(row => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span><b>${row.barcode}</b></span> <span style="color:#666;">${row.date}</span>`;
+                list.appendChild(li);
+            });
         }
 
         function confirmReset() {
             if (confirm("Are you sure you want to clear the Google Sheet?")) {
-                google.script.run.withSuccessHandler(function() {
-                    document.getElementById('status').innerText = "Sheet cleared.";
-                    loadSortedLog();
-                }).clearSheet();
+                if (typeof google !== 'undefined' && google.script) {
+                    google.script.run.withSuccessHandler(function() {
+                        document.getElementById('status').innerText = "Sheet cleared.";
+                        loadSortedLog();
+                    }).clearSheet();
+                } else {
+                    alert("Clearing from Cloudflare requires an authorized API endpoint.");
+                }
             }
         }
     </script>
