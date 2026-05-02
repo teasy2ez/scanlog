@@ -144,8 +144,6 @@
         </ul>
 
         <button class="btn btn-secondary" onclick="handleCreateNewSheet()">Create New Sheet</button>
-        <br>
-        <button class="btn btn-danger" onclick="confirmReset()">Clear Google Sheet</button>
     </div>
 
     <div id="log-view" class="view">
@@ -281,14 +279,6 @@
                 li.innerHTML = `<span><b>${row.barcode}</b></span> <span style="color:#666;">${row.date}</span>`;
                 list.appendChild(li);
             });
-        }
-
-        function confirmReset() {
-            if (confirm("Are you sure you want to clear the Google Sheet?")) {
-                google.script.run.withSuccessHandler(function() {
-                    document.getElementById('status').innerText = "Sheet cleared.";
-                    loadSortedLog();
-                }).clearSheet();
         }
     </script>
 </body>
